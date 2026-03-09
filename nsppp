@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบคำนวณต้นทุนบริษัท nsp part co.ltd</title>
+<style>
+/* ---------------- CSS ทั่วไป ---------------- */
+body { font-family:"Sarabun", sans-serif; margin:20px; background:#f8f9fa; color:#333; }
+h1,h2,h3{text-align:center;margin-bottom:10px;}
+table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin-top: 10px; 
+    background:white; 
+    border-radius:10px; 
+    overflow: hidden; 
+    box-shadow: 0 0 8px rgba(0,0,0,0.1);
+}
+/* ปรับความกว้างของตารางใน Process/Tooling (Editor) ให้แคบลงตามภาพ */
+#processEditorContainer table { width: 90%; margin-left: auto; margin-right: auto; }
+
+th, td { padding: 10px 5px; text-align: center; border: 1px solid #ddd; }
+th { background:#007bff; color:white; font-size: 14px; }
+
+/* CSS สำหรับหน้าเดือน (Monthly Report) */
+#monthlyTable th:nth-child(2) { width: 15%; } 
+#monthlyTable th:nth-child(6) { width: 100px; } 
+#monthlyTable th:nth-child(3), 
+#monthlyTable th:nth-child(4), 
+#monthlyTable th:nth-child(5) { width: 18%; }
+
+tr:nth-child(even){ background:#f2f2f2; }
+/* ปรับให้แถวรวมไม่ต้องมีพื้นหลังสลับสี */
+#processEditorContainer table tfoot tr { background: #fff !important; font-weight: bold; }
+#processEditorContainer table tfoot td { text-align: left; }
+
+button, .btn{ padding:5px 10px; border:none; border-radius:5px; cursor:pointer; margin:3px; font-size:14px;}
+.add-btn{ background:#007bff; color:white; margin:5px 0; }
+.add-btn:hover{ background:#0056b3; }
+.back-btn{ background:#6c757d; color:white; text-decoration:none; display:inline-block; padding:5px 8px; }
+.delete-btn{ background:#dc3545; color:white; }
+.save-btn{ background:#ffc107; color:black; }
+.save-btn:hover{ background:#e0a800; }
+.tab{ display:none; }
+.tab-active{ display:block; }
+.tab-buttons{ text-align:center; margin-bottom:10px; }
+.tab-buttons button{ margin:0 0px; padding:8px 16px; border-radius:0; border-bottom:2px solid transparent; background:#e9ecef; }
+.tab-buttons button.active{ background:#007bff; color:white; border-bottom:2px solid #0056b3; }
+input{ padding:5px; border:1px solid #ccc; border-radius:5px; width:80px; text-align:center; }
+input[type=text]{width:150px;}
+tfoot td{ font-weight:bold; }
+#monthlyTable tfoot td:nth-child(3), 
+#monthlyTable tfoot td:nth-child(4), 
+#monthlyTable tfoot td:nth-child(5) { text-align: center; } 
+
+/* จัดรูปแบบเฉพาะ Process/Tooling Editor ให้เหมือนรูปภาพ */
+#processEditorContainer h3 { text-align: left; width: 90%; margin: 15px auto 5px; }
+#processEditorContainer button.add-btn { width: 90%; margin-left: auto; margin-right: auto; display: block; text-align: left; }
+.trash-btn { background: #dc3545; color: white; padding: 5px 8px; }
+
+/* **CSS สำหรับการซ่อน/แสดง Editor** */
+#costTableContainer { display: block; } /* ตาราง Cost หลัก */
+#processEditorContainer { 
+    display: none; /* ซ่อน Editor เริ่มต้น */
+    border: 1px solid #ccc;
+    padding: 20px;
+    margin-top: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+</style>
+</head>
+<body>
+
+<div class="tab-buttons">
+<button onclick="showMonthlyReport()" id="tabMonthlyReport">รายงานเดือน</button>
+<button onclick="showTab('companyTab')" id="tabCompany" disabled>ชื่อบริษัทลุกค้า</button>
+<button onclick="showTab('detailTab')" id="tabDetail" disabled>รายละเอียดบริษัท</button>
+<button onclick="showTab('costTab')" id="tabCost" disabled>ต้นทุน Part</button>
+</div>
+
+<div style="text-align:center; margin-bottom:10px;">
+<button class="save-btn" onclick="downloadJSON()">💾 ดาวน์โหลด JSON</button>
+<input type="file" id="fileInput" style="display:none" onchange="uploadJSON(event)">
+<button class="back-btn" onclick="document.getElementById('fileInput').click()">📂 โหลด JSON</button>
+</div>
+
+<div id="monthlyReportTab" class="tab tab-active">
+    <h1>รายงานสรุปรายเดือน (ปี 2025)</h1>
+    <p style="text-align:center;">**กรุณาเลือกเดือนเพื่อเข้าจัดการข้อมูลของเดือนนั้นๆ**</p>
+    <table id="monthlyTable">
+        <thead>
+            <tr>
+                <th>ลำดับ</th>
+                <th>เดือน</th>
+                <th>ยอดขายรวม (บาท)</th>
+                <th>ต้นทุนรวม (บาท)</th>
+                <th>กำไรรวม (บาท)</th>
+                <th>จัดการข้อมูล</th>
+            </tr>
+        </thead>
+        <tbody id="monthlyBody">
+            </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2">รวมทั้งปี</td>
+                <td id="monthlyTotalSell">0.00</td>
+                <td id="monthlyTotalCost">0.00</td>
+                <td id="monthlyTotalProfit">0.00</td>
+                <td>-</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+<div id="companyTab" class="tab">
+    <h1 id="companyTabTitle">สรุปบริษัท</h1>
+<div style="text-align:center; margin-bottom:10px;">
+<input type="text" id="newCompanyName" placeholder="กรอกชื่อบริษัทใหม่">
+<button class="add-btn" onclick="addCompany()">➕ เพิ่มบริษัท</button>
+</div>
+<table id="companyTable">
+<thead>
+<tr>
+<th>ลำดับ</th>
+<th>บริษัท</th>
+<th>ยอดขายรวม(บาท)</th>
+<th>ต้นทุนรวม(บาท)</th>
+<th>ค่าบริหาร(%)</th>
+<th>สรุปผล</th>
+<th>ดูรายละเอียดเพิ่มเติม</th>
+<th>ลบ</th>
+</tr>
+</thead>
+<tbody id="companyBody"></tbody>
+</table>
+<div style="text-align:center; margin-top:10px;">
+    <button class="back-btn" onclick="showMonthlyReport()">⬅ กลับไปยังรายงานเดือน</button>
+</div>
+</div>
+
+<div id="detailTab" class="tab">
+<h2 id="companyName">รายละเอียดบริษัท</h2>
+<table id="detailTable">
+<thead>
+<tr>
+<th>ลำดับ</th>
+<th>Part Name</th>
+<th>ราคา/ชิ้น</th>
+<th>Order</th>
+<th>ยอดขายรวม</th>
+<th>ต้นทุน/ชิ้น</th>
+<th>ต้นทุนรวม</th>
+<th>สรุปผล</th>
+<th>ดูต้นทุน</th>
+<th>ลบ</th>
+</tr>
+</thead>
+<tbody id="detailBody"></tbody>
+<tfoot>
+<tr>
+<td colspan="4">รวมทั้งหมด</td>
+<td id="totalSellAll">0</td>
+<td>-</td>
+<td id="totalCostAll">0</td>
+<td id="totalProfitAll">0</td>
+<td>-</td>
+<td>-</td>
+</tr>
+</tfoot>
+</table>
+<div style="text-align:center; margin-top:10px;">
+<button class="add-btn" onclick="addPart()">➕ เพิ่มแถว</button>
+<button class="back-btn" onclick="showTab('companyTab')">⬅ กลับหน้าแรก</button>
+</div>
+</div>
+
+<div id="costTab" class="tab">
+    <div id="costTableContainer">
+        <h2 id="costPartName">Part: </h2>
+        <table id="costTable">
+            <thead>
+                <tr>
+                    <th>ลำดับ</th>
+                    <th>Process Name</th>
+                    <th>ต้นทุน(บาท)</th>
+                    <th>ลบ</th>
+                    <th>แก้ Process</th>
+                </tr>
+            </thead>
+            <tbody id="costBody"></tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="2">รวมทั้งหมด</td>
+                    <td id="costTotal">0</td>
+                    <td colspan="2"></td>
+                </tr>
+            </tfoot>
+        </table>
+        <div style="text-align:center; margin-top:10px;">
+            <button class="add-btn" onclick="addCostRow()">➕ เพิ่มแถว</button>
+            <button class="back-btn" onclick="showTab('detailTab')">⬅ กลับ</button>
+        </div>
+    </div>
+
+    <div id="processEditorContainer">
+        <h2 id="processPartNameEditor">Part: / Process: </h2>
+
+        <h3>ค่าวัตถุดิบ</h3>
+        <table id="table1">
+            <thead>
+                <tr>
+                    <th>ลำดับ</th>
+                    <th>Name</th>
+                    <th>ค่าวัตถุดิบ</th>
+                    <th>จำนวน</th>
+                    <th>รวม(บาท)</th>
+                    <th>ลบ</th>
+                </tr>
+            </thead>
+            <tbody id="table1Body"></tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" style="text-align: right;">รวมทั้งหมด(บาท)</td>
+                    <td id="table1Total">0.00</td>
+                    <td>-</td>
+                </tr>
+            </tfoot>
+        </table>
+        <button class="add-btn" id="addTable1RowBtn">➕ เพิ่มแถว</button>
+
+        <h3>ค่าแรง</h3>
+        <table id="table2">
+            <thead>
+                <tr>
+                    <th>ลำดับ</th>
+                    <th>Name</th>
+                    <th>ค่าแรง/วัน</th>
+                    <th>จำนวนวัน</th>
+                    <th>รวม(บาท)</th>
+                    <th>ลบ</th>
+                </tr>
+            </thead>
+            <tbody id="table2Body"></tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" style="text-align: right;">รวมทั้งหมด(บาท)</td>
+                    <td id="table2Total">0.00</td>
+                    <td>-</td>
+                </tr>
+            </tfoot>
+        </table>
+        <button class="add-btn" id="addTable2RowBtn">➕ เพิ่มแถว</button>
+
+        <h3>Tooling</h3>
+        <table id="table3">
+            <thead>
+                <tr>
+                    <th>ลำดับ</th>
+                    <th>Name</th>
+                    <th>ราคา/ชิ้น</th>
+                    <th>จำนวนที่ใช้/ชิ้น</th>
+                    <th>รวม (บาท)</th>
+                    <th>ลบ</th>
+                </tr>
+            </thead>
+            <tbody id="table3Body"></tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" style="text-align: right;">รวมทั้งหมด</td>
+                    <td id="table3Total">0.00</td>
+                    <td>-</td>
+                </tr>
+            </tfoot>
+        </table>
+        <button class="add-btn" id="addTable3RowBtn">➕ เพิ่มแถว</button>
+
+        <div style="text-align:center; font-weight:bold; font-size:16px; margin:20px;">
+            รวมทั้งหมด: <span id="totalAllTables">0.00</span> บาท
+        </div>
+        <div style="text-align:center; margin-top:10px;">
+            <button class="back-btn" onclick="closeProcessEditor()">⬅ กลับไปหน้าต้นทุน</button>
+        </div>
+    </div>
+</div>
+
+
+<script>
+// ---------------- ตัวช่วยและตัวแปรหลัก ----------------
+let currentCompany = '', currentPart = '', currentProcess = '';
+let currentMonthKey = ''; 
+const YEAR = '2026'; 
+function toNumber(val){ return parseFloat(val)||0; }
+
+// Utility: ดึงข้อมูลที่เก็บตาม Month Key
+function getMonthlyData(keyPrefix) {
+    if (!currentMonthKey && keyPrefix !== 'all_months_data') return (keyPrefix === 'companies') ? [] : {}; 
+    const dataKey = (keyPrefix === 'all_months_data') ? keyPrefix : `${keyPrefix}_${currentMonthKey}`;
+    
+    if (keyPrefix.includes('details') || keyPrefix.includes('cost') || keyPrefix.includes('process')) {
+        return JSON.parse(localStorage.getItem(dataKey) || '{}');
+    }
+    return JSON.parse(localStorage.getItem(dataKey) || '[]');
+}
+
+// Utility: บันทึกข้อมูลแยกตาม Month Key
+function setMonthlyData(keyPrefix, data) {
+    if (!currentMonthKey) return; 
+    const dataKey = `${keyPrefix}_${currentMonthKey}`;
+    localStorage.setItem(dataKey, JSON.stringify(data));
+}
+
+// Utility: ควบคุมสถานะปุ่มแท็บ
+function setTabButtonsEnabled(enabled) {
+    document.getElementById('tabCompany').disabled = !enabled;
+    document.getElementById('tabDetail').disabled = !enabled;
+    document.getElementById('tabCost').disabled = !enabled;
+}
+
+// ---------------- Tab ----------------
+function showTab(id){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('tab-active'));
+    document.getElementById(id).classList.add('tab-active');
+    document.querySelectorAll('.tab-buttons button').forEach(b=>b.classList.remove('active'));
+    
+    // ปิด Process Editor เมื่อเปลี่ยน Tab
+    if (id !== 'costTab') {
+        document.getElementById('costTableContainer').style.display = 'block';
+        document.getElementById('processEditorContainer').style.display = 'none';
+    }
+
+    if(id==='companyTab') document.getElementById('tabCompany').classList.add('active');
+    if(id==='detailTab') document.getElementById('tabDetail').classList.add('active');
+    if(id==='costTab') document.getElementById('tabCost').classList.add('active');
+    if(id==='monthlyReportTab') document.getElementById('tabMonthlyReport').classList.add('active');
+    
+    if (id === 'monthlyReportTab') {
+        setTabButtonsEnabled(false);
+    } else {
+        setTabButtonsEnabled(true);
+    }
+}
+
+// ---------------- หน้าเดือน (Monthly Report) ----------------
+const MONTH_NAMES = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+function showMonthlyReport() {
+    currentMonthKey = ''; 
+    showTab('monthlyReportTab');
+    loadMonthlyReport();
+}
+
+function loadMonthlyReport() {
+    const tbody = document.getElementById('monthlyBody');
+    tbody.innerHTML = '';
+    
+    let totalSellYear = 0, totalCostYear = 0, totalProfitYear = 0;
+
+    MONTH_NAMES.forEach((month, index) => {
+        const monthIndex = index + 1;
+        const monthKey = `${String(monthIndex).padStart(2, '0')}_${YEAR}`;
+        
+        const companiesKey = `companies_${monthKey}`;
+        const companiesOfMonth = JSON.parse(localStorage.getItem(companiesKey) || '[]');
+        
+        const monthlySell = companiesOfMonth.reduce((sum, c) => sum + toNumber(c.sell), 0);
+        const monthlyCost = companiesOfMonth.reduce((sum, c) => sum + toNumber(c.cost), 0);
+        const monthlyProfit = companiesOfMonth.reduce((sum, c) => sum + toNumber(c.profit), 0); 
+        
+        totalSellYear += monthlySell;
+        totalCostYear += monthlyCost;
+        totalProfitYear += monthlyProfit;
+        
+        const row = tbody.insertRow();
+        
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${month} ${YEAR}</td>
+            <td>${monthlySell.toFixed(2)}</td>
+            <td>${monthlyCost.toFixed(2)}</td>
+            <td>${monthlyProfit.toFixed(2)}</td>
+            <td><button class="add-btn" onclick="openMonth('${monthKey}', '${month}')">ดูรายละเอียด</button></td> 
+        `;
+    });
+
+    document.getElementById('monthlyTotalSell').textContent = totalSellYear.toFixed(2);
+    document.getElementById('monthlyTotalCost').textContent = totalCostYear.toFixed(2);
+    document.getElementById('monthlyTotalProfit').textContent = totalProfitYear.toFixed(2);
+}
+
+function openMonth(monthKey, monthName) {
+    currentMonthKey = monthKey;
+    document.getElementById('companyTabTitle').textContent = `สรุปบริษัท (เดือน ${monthName} ${YEAR})`;
+    showTab('companyTab');
+    loadCompanies();
+}
+
+// ---------------- หน้า 1 (Company Summary) ----------------
+function addCompany(){
+    const name=document.getElementById('newCompanyName').value.trim();
+    if(!name) return alert('กรุณากรอกชื่อบริษัท');
+    if (!currentMonthKey) return; 
+    let companies=getMonthlyData('companies'); 
+    
+    if(companies.some(c => c.name === name)) {
+        return alert('มีชื่อบริษัทนี้อยู่แล้วในเดือนนี้');
+    }
+
+    companies.push({name,sell:0,cost:0,profit:0,overhead:10});
+    setMonthlyData('companies', companies); 
+    document.getElementById('newCompanyName').value='';
+    loadCompanies();
+}
+function loadCompanies(){
+    const companies=getMonthlyData('companies'); 
+    const tbody=document.getElementById('companyBody'); tbody.innerHTML='';
+    companies.forEach((c,i)=>{
+        const row=tbody.insertRow();
+        row.innerHTML=`
+        <td>${i+1}</td>
+        <td>${c.name}</td>
+        <td>${toNumber(c.sell).toFixed(2)}</td>
+        <td>${toNumber(c.cost).toFixed(2)}</td>
+        <td><input type="number" class="overhead" value="${toNumber(c.overhead)}" oninput="updateOverhead(this,'${c.name}')"></td>
+        <td>${toNumber(c.profit).toFixed(2)}</td>
+        <td><button onclick="openDetail('${c.name}')">ดูรายละเอียด</button></td>
+        <td><button onclick="deleteCompany('${c.name}')">🗑️</button></td>`;
+    });
+    updateCompanySummary(); 
+}
+function updateOverhead(input,name){
+    let value=toNumber(input.value);
+    let companies=getMonthlyData('companies'); 
+    const comp=companies.find(c=>c.name===name);
+    if(comp) comp.overhead=value;
+    setMonthlyData('companies', companies); 
+    updateCompanySummary();
+}
+function deleteCompany(name){
+    if (!confirm(`ยืนยันการลบบริษัท "${name}" และข้อมูล Part/Cost ทั้งหมดของบริษัทนี้ในเดือน ${currentMonthKey}?`)) return;
+
+    let companies=getMonthlyData('companies'); 
+    companies=companies.filter(c=>c.name!==name);
+    setMonthlyData('companies', companies); 
+
+    let details=getMonthlyData('details');
+    const partsToDelete = (details[name] || []).map(d => d.part);
+    delete details[name]; 
+    setMonthlyData('details',details);
+
+    let costData = getMonthlyData('cost');
+    let p1All = getMonthlyData('process1');
+    let p2All = getMonthlyData('process2');
+
+    partsToDelete.forEach(partName => {
+        if(costData[partName]) {
+            const processesToDelete = costData[partName].map(c => c.step);
+            delete costData[partName];
+            
+            processesToDelete.forEach(processName => {
+                const processKey = `${partName}|${processName}`;
+                delete p1All[processKey];
+                delete p2All[processKey];
+            });
+        }
+    });
+
+    setMonthlyData('cost', costData);
+    setMonthlyData('process1', p1All);
+    setMonthlyData('process2', p2All);
+
+    loadCompanies();
+}
+
+// ---------------- หน้า 2 (Detail) ----------------
+function openDetail(name){
+currentCompany=name;
+document.getElementById('companyName').textContent=`รายละเอียดบริษัท: ${name}`;
+showTab('detailTab');
+loadDetail();
+}
+function addPart(){
+const tbody=document.getElementById('detailBody');
+const row=tbody.insertRow();
+row.innerHTML=`
+<td>${tbody.rows.length+1}</td>
+<td><input class="partName"></td>
+<td><input type="number" value="0" class="price"></td>
+<td><input type="number" value="0" class="order"></td>
+<td class="totalSell">0.00</td>
+<td class="costPerPiece">0.00</td>
+<td class="totalCost">0.00</td>
+<td class="profit">0.00</td>
+<td><button onclick="openCost(this)">ดูต้นทุน</button></td>
+<td><button onclick="deletePart(this)">🗑️</button></td>`;
+row.querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>calculateDetail()));
+}
+function loadDetail(){
+let data=getMonthlyData('details');
+let list=data[currentCompany]||[];
+const tbody=document.getElementById('detailBody'); tbody.innerHTML='';
+list.forEach(d=>{
+const row=tbody.insertRow();
+const costPer = toNumber(d.order) > 0 ? toNumber(d.totalCost)/toNumber(d.order) : 0;
+row.innerHTML=`
+<td>${tbody.rows.length+1}</td>
+<td><input class="partName" value="${d.part}"></td>
+<td><input type="number" value="${d.price}" class="price"></td>
+<td><input type="number" value="${d.order}" class="order"></td>
+<td class="totalSell">${(toNumber(d.price)*toNumber(d.order)).toFixed(2)}</td>
+<td class="costPerPiece">${costPer.toFixed(2)}</td>
+<td class="totalCost">${toNumber(d.totalCost).toFixed(2)}</td>
+<td class="profit">${(toNumber(d.price)*toNumber(d.order) - toNumber(d.totalCost)).toFixed(2)}</td>
+<td><button onclick="openCost(this)">ดูต้นทุน</button></td>
+<td><button onclick="deletePart(this)">🗑️</button></td>`;
+row.querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>calculateDetail()));
+});
+calculateDetail(); 
+}
+function calculateDetail(){
+const rows=document.querySelectorAll('#detailBody tr');
+let totalSellAll=0,totalCostAll=0,totalProfitAll=0;
+rows.forEach(row=>{
+const price=toNumber(row.querySelector('.price')?.value);
+const order=toNumber(row.querySelector('.order')?.value);
+const totalCost=toNumber(row.querySelector('.totalCost')?.textContent);
+const totalSell = price * order;
+const profit=totalSell - totalCost;
+
+row.querySelector('.totalSell').textContent=totalSell.toFixed(2);
+row.querySelector('.profit').textContent=profit.toFixed(2);
+
+totalSellAll+=totalSell; 
+totalCostAll+=totalCost; 
+totalProfitAll+=profit;
+});
+document.getElementById('totalSellAll').textContent=totalSellAll.toFixed(2);
+document.getElementById('totalCostAll').textContent=totalCostAll.toFixed(2);
+document.getElementById('totalProfitAll').textContent=totalProfitAll.toFixed(2);
+saveDetails();
+updateCompanySummary();
+}
+function saveDetails(){
+let data=getMonthlyData('details');
+data[currentCompany]=[];
+document.querySelectorAll('#detailBody tr').forEach(row=>{
+data[currentCompany].push({
+part: row.querySelector('.partName')?.value,
+price: toNumber(row.querySelector('.price')?.value),
+order: toNumber(row.querySelector('.order')?.value),
+totalCost: toNumber(row.querySelector('.totalCost')?.textContent)
+});
+});
+setMonthlyData('details',data);
+}
+function deletePart(btn){
+    if (!confirm("ยืนยันการลบ Part นี้และข้อมูลต้นทุนทั้งหมดที่เกี่ยวข้อง?")) return;
+    const row = btn.closest('tr');
+    const partName = row.querySelector('.partName').value;
+
+    row.remove();
+    calculateDetail(); 
+
+    let costData = getMonthlyData('cost');
+    let p1All = getMonthlyData('process1');
+    let p2All = getMonthlyData('process2');
+
+    if(costData[partName]) {
+        const processesToDelete = costData[partName].map(c => c.step);
+        delete costData[partName];
+        
+        processesToDelete.forEach(processName => {
+            const processKey = `${partName}|${processName}`;
+            delete p1All[processKey];
+            delete p2All[processKey];
+        });
+    }
+
+    setMonthlyData('cost', costData);
+    setMonthlyData('process1', p1All);
+    setMonthlyData('process2', p2All);
+}
+
+// ---------------- หน้า 3 (Cost) & 4 (Process/Tooling) ----------------
+
+function openCost(btn){
+const row=btn.closest('tr');
+currentPart=row.querySelector('.partName').value;
+if (!currentPart) return alert('กรุณากรอก Part Name ก่อน');
+document.getElementById('costPartName').textContent=`Part: ${currentPart}`;
+showTab('costTab');
+loadCost();
+}
+
+function loadCost(){
+    document.getElementById('costTableContainer').style.display = 'block';
+    document.getElementById('processEditorContainer').style.display = 'none';
+
+    let data=getMonthlyData('cost');
+    const list=data[currentPart]||[];
+    const tbody=document.getElementById('costBody'); tbody.innerHTML='';
+    list.forEach((d,i)=>{
+        const row=tbody.insertRow();
+        row.innerHTML=`
+        <td>${i+1}</td>
+        <td><input class="processName" value="${d.step}" oninput="saveCost()"></td>
+        <td class="costTotal" readonly>${toNumber(d.total).toFixed(2)}</td>
+        <td><button class="trash-btn" onclick="deleteCostRow(this)">🗑️</button></td>
+        <td><button class="add-btn" onclick="openProcessEditor(this)">แก้ Process</button></td>`;
+    });
+    calculateCost();
+}
+
+function addCostRow(){
+    const tbody=document.getElementById('costBody');
+    const row=tbody.insertRow();
+    row.innerHTML=`
+    <td>${tbody.rows.length+1}</td>
+    <td><input class="processName" oninput="saveCost()"></td>
+    <td class="costTotal" readonly>0.00</td>
+    <td><button class="trash-btn" onclick="deleteCostRow(this)">🗑️</button></td>
+    <td><button class="add-btn" onclick="openProcessEditor(this)">แก้ Process</button></td>`;
+}
+
+function deleteCostRow(btn) {
+    const row = btn.closest('tr');
+    const processName = row.querySelector('.processName').value;
+
+    if (processName) {
+        let p1All = getMonthlyData('process1');
+        let p2All = getMonthlyData('process2');
+        const processKey = `${currentPart}|${processName}`;
+        delete p1All[processKey];
+        delete p2All[processKey];
+        setMonthlyData('process1', p1All);
+        setMonthlyData('process2', p2All);
+    }
+
+    row.remove();
+    calculateCost(); 
+}
+
+function calculateCost(){
+    let total=0;
+    document.querySelectorAll('#costBody tr').forEach(row=>{
+        total+=toNumber(row.querySelector('.costTotal')?.textContent);
+    });
+    document.getElementById('costTotal').textContent=total.toFixed(2);
+
+    document.querySelectorAll('#detailBody tr').forEach(row=>{
+        if(row.querySelector('.partName').value===currentPart){
+            const order=toNumber(row.querySelector('.order')?.value||0);
+            row.querySelector('.costPerPiece').textContent=(order > 0 ? total/order : 0).toFixed(2);
+            row.querySelector('.totalCost').textContent=total.toFixed(2);
+        }
+    });
+    calculateDetail(); 
+    saveCost();
+}
+function saveCost(){
+    let data=getMonthlyData('cost');
+    const list=[];
+    document.querySelectorAll('#costBody tr').forEach(row=>{
+        list.push({step: row.querySelector('.processName')?.value,total: toNumber(row.querySelector('.costTotal')?.textContent)});
+    });
+    data[currentPart]=list;
+    setMonthlyData('cost',data);
+}
+
+// **Process/Tooling Editor (หน้า 4 เดิม) ฟังก์ชันใหม่**
+function openProcessEditor(btn) {
+    const row = btn.closest('tr');
+    const processName = row.querySelector('.processName').value.trim();
+
+    if (!processName) {
+        alert("กรุณากรอก Process Name ก่อนเข้าแก้ไข");
+        row.querySelector('.processName').focus();
+        return;
+    }
+
+    currentProcess = processName;  
+    const storageKey = `${currentPart}|${currentProcess}`;
+    
+    // ซ่อนตาราง Cost หลักและแสดง Editor ขึ้นมา
+    document.getElementById('costTableContainer').style.display = 'none';
+    document.getElementById('processEditorContainer').style.display = 'block';
+
+    loadProcessEditor(storageKey);
+}
+
+function closeProcessEditor() {
+    // ซ่อน Editor และแสดงตาราง Cost หลักกลับมา
+    document.getElementById('costTableContainer').style.display = 'block';
+    document.getElementById('processEditorContainer').style.display = 'none';
+    loadCost(); // โหลดข้อมูล Cost กลับมาเพื่อให้แน่ใจว่าอัปเดตล่าสุด
+}
+
+function loadProcessEditor(storageKey) {
+    const [part, process] = storageKey.split('|');
+    document.getElementById('processPartNameEditor').textContent = `Part: ${part} / Process: ${process}`;
+    
+    document.getElementById('addTable1RowBtn').onclick = () => addTable1Row(storageKey);
+    document.getElementById('addTable2RowBtn').onclick = () => addTable2Row(storageKey);
+    document.getElementById('addTable3RowBtn').onclick = () => addTable3Row(storageKey);
+
+    let p1All = getMonthlyData('process1');
+    let p2All = getMonthlyData('process2');
+    let t1 = p1All[storageKey] || [];
+    let t2 = p2All[storageKey] || [];
+    
+    // ตาราง 1 (ค่าแรง)
+    const tbody1 = document.getElementById('table1Body'); tbody1.innerHTML = '';
+    t1.forEach((d, i) => {
+        const row = tbody1.insertRow();
+        const sum = toNumber(d.price) * toNumber(d.day);
+        row.innerHTML = `
+        <td>${i + 1}</td>
+        <td><input type="text" value="${d.name}" oninput="calculateProcess('${storageKey}')"></td>
+        <td><input type="number" value="${d.price}" oninput="calculateProcess('${storageKey}')"></td>
+        <td><input type="number" value="${d.day}" oninput="calculateProcess('${storageKey}')"></td>
+        <td class="totalCell">${sum.toFixed(2)}</td>
+        <td><button class="trash-btn" onclick="this.closest('tr').remove();calculateProcess('${storageKey}')">🗑️</button></td>
+        `;
+    });
+
+    // ตาราง 2 (Tooling)
+    const tbody2 = document.getElementById('table2Body'); tbody2.innerHTML = '';
+    t2.forEach((d, i) => {
+        const row = tbody2.insertRow();
+        const sum = toNumber(d.price) * toNumber(d.qty);
+        row.innerHTML = `
+        <td>${i + 1}</td>
+        <td><input type="text" value="${d.name}" oninput="calculateProcess('${storageKey}')"></td>
+        <td><input type="number" value="${d.price}" oninput="calculateProcess('${storageKey}')"></td>
+        <td><input type="number" value="${d.qty}" oninput="calculateProcess('${storageKey}')"></td>
+        <td class="totalCell">${sum.toFixed(2)}</td>
+        <td><button class="trash-btn" onclick="this.closest('tr').remove();calculateProcess('${storageKey}')">🗑️</button></td>
+        `;
+    });
+
+    calculateProcess(storageKey);
+}
+
+function addTable1Row(storageKey) {
+    const tbody = document.getElementById('table1Body');
+    const row = tbody.insertRow();
+    row.innerHTML = `
+    <td>${tbody.rows.length + 1}</td>
+    <td><input type="text"></td>
+    <td><input type="number" value="0" oninput="calculateProcess('${storageKey}')"></td>
+    <td><input type="number" value="0" oninput="calculateProcess('${storageKey}')"></td>
+    <td class="totalCell">0.00</td>
+    <td><button class="trash-btn" onclick="this.closest('tr').remove();calculateProcess('${storageKey}')">🗑️</button></td>
+    `;
+    calculateProcess(storageKey);
+}
+function addTable2Row(storageKey) {
+    const tbody = document.getElementById('table2Body');
+    const row = tbody.insertRow();
+    row.innerHTML = `
+    <td>${tbody.rows.length + 1}</td>
+    <td><input type="text"></td>
+    <td><input type="number" value="0" oninput="calculateProcess('${storageKey}')"></td>
+    <td><input type="number" value="0" oninput="calculateProcess('${storageKey}')"></td>
+    <td class="totalCell">0.00</td>
+    <td><button class="trash-btn" onclick="this.closest('tr').remove();calculateProcess('${storageKey}')">🗑️</button></td>
+    `;
+    calculateProcess(storageKey);
+}
+function addTable3Row(storageKey) {
+    const tbody = document.getElementById('table3Body');
+    const row = tbody.insertRow();
+    row.innerHTML = `
+    <td>${tbody.rows.length + 1}</td>
+    <td><input type="text"></td>
+    <td><input type="number" value="0" oninput="calculateProcess('${storageKey}')"></td>
+    <td><input type="number" value="0" oninput="calculateProcess('${storageKey}')"></td>
+    <td class="totalCell">0.00</td>
+    <td><button class="trash-btn" onclick="this.closest('tr').remove();calculateProcess('${storageKey}')">🗑️</button></td>
+    `;
+    calculateProcess(storageKey);
+}
+
+function calculateProcess(storageKey) {
+    let total1 = 0, total2 = 0;
+    // คำนวณตาราง 1
+    document.querySelectorAll('#table1Body tr').forEach(r => {
+        const price = toNumber(r.cells[2].querySelector('input')?.value);
+        const day = toNumber(r.cells[3].querySelector('input')?.value);
+        const sum = price * day;
+        r.cells[4].textContent = sum.toFixed(2);
+        total1 += sum;
+    });
+    document.getElementById('table1Total').textContent = total1.toFixed(2);
+
+    // คำนวณตาราง 2
+    document.querySelectorAll('#table2Body tr').forEach(r => {
+        const price = toNumber(r.cells[2].querySelector('input')?.value);
+        const qty = toNumber(r.cells[3].querySelector('input')?.value);
+        const sum = price * qty;
+        r.cells[4].textContent = sum.toFixed(2);
+        total2 += sum;
+    });
+    document.getElementById('table2Total').textContent = total2.toFixed(2);
+
+       // คำนวณตาราง 3
+    document.querySelectorAll('#table2Body tr').forEach(r => {
+        const price = toNumber(r.cells[2].querySelector('input')?.value);
+        const qty = toNumber(r.cells[3].querySelector('input')?.value);
+        const sum = price * qty;
+        r.cells[4].textContent = sum.toFixed(2);
+        total2 += sum;
+    });
+    document.getElementById('table2Total').textContent = total2.toFixed(2);
+
+    // คำนวณตาราง 3
+    let total3 = 0;
+    document.querySelectorAll('#table3Body tr').forEach(r => {
+        const price = toNumber(r.cells[2].querySelector('input')?.value);
+        const qty = toNumber(r.cells[3].querySelector('input')?.value);
+        const sum = price * qty;
+        r.cells[4].textContent = sum.toFixed(2);
+        total3 += sum;
+    });
+    document.getElementById('table3Total').textContent = total3.toFixed(2);
+
+    const grandTotal = total1 + total2 + total3;
+    document.getElementById('totalAllTables').textContent = grandTotal.toFixed(2);
+    
+    saveProcess(storageKey);  
+
+    // อัปเดตตาราง Cost หลัก (แม้จะซ่อนอยู่)
+    document.querySelectorAll('#costBody tr').forEach(row => {
+        const processNameInput = row.querySelector('.processName');
+        if (processNameInput && processNameInput.value.trim() === currentProcess) {
+            row.querySelector('.costTotal').textContent = grandTotal.toFixed(2);
+        }
+    });
+
+    calculateCost(); // เรียกเพื่ออัปเดต Cost และ Detail 
+}
+
+function saveProcess(storageKey) {
+    let p1All = getMonthlyData('process1');
+    let p2All = getMonthlyData('process2');
+    
+    p1All[storageKey] = [];
+    document.querySelectorAll('#table1Body tr').forEach(r => {
+        p1All[storageKey].push({  
+            name: r.cells[1].querySelector('input')?.value,  
+            price: toNumber(r.cells[2].querySelector('input')?.value),  
+            day: toNumber(r.cells[3].querySelector('input')?.value)  
+        });
+    });
+    p2All[storageKey] = [];
+    document.querySelectorAll('#table2Body tr').forEach(r => {
+        p2All[storageKey].push({  
+            name: r.cells[1].querySelector('input')?.value,  
+            price: toNumber(r.cells[2].querySelector('input')?.value),  
+            qty: toNumber(r.cells[3].querySelector('input')?.value)  
+        });
+    });
+    
+    setMonthlyData('process1', p1All);
+    setMonthlyData('process2', p2All);
+}
+
+// ---------------- หน้า 1 update ----------------
+function updateCompanySummary(){
+const tbody=document.getElementById('companyBody');
+let companies=getMonthlyData('companies'); 
+let allCompanySell = 0;
+let allCompanyCost = 0;
+
+Array.from(tbody.rows).forEach((row,i)=>{
+const name=row.cells[1].textContent;
+let detail=getMonthlyData('details')[name]||[];
+let totalSell=0,totalCost=0;
+detail.forEach(d=>{totalSell+=toNumber(d.price)*toNumber(d.order); totalCost+=toNumber(d.totalCost);});
+
+const overhead=toNumber(row.querySelector('.overhead')?.value||0);
+const profit=totalSell - totalCost - (totalCost * overhead / 100);
+
+row.cells[2].textContent=totalSell.toFixed(2);
+row.cells[3].textContent=totalCost.toFixed(2);
+row.cells[5].textContent=profit.toFixed(2);
+
+const compIndex = companies.findIndex(c => c.name === name);
+if (compIndex > -1) {
+    companies[compIndex].sell=totalSell;
+    companies[compIndex].cost=totalCost;
+    companies[compIndex].profit=profit;
+    companies[compIndex].overhead=overhead; 
+}
+
+allCompanySell += totalSell;
+allCompanyCost += totalCost;
+});
+
+setMonthlyData('companies', companies); 
+loadMonthlyReport(); 
+}
+
+// ---------------- Save/Load JSON ----------------
+function downloadJSON(){
+const fullData = {};
+for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith('companies_') || key.startsWith('details_') || key.startsWith('cost_') || key.startsWith('process1_') || key.startsWith('process2_'))) {
+         fullData[key] = JSON.parse(localStorage.getItem(key));
+    }
+}
+const data = JSON.stringify(fullData, null, 2);
+
+const blob=new Blob([data],{type:'application/json'});
+const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='company_monthly_data.json'; a.click();
+}
+function uploadJSON(e){
+const file=e.target.files[0];
+const reader=new FileReader();
+reader.onload=function(){
+    try {
+        const fullData = JSON.parse(reader.result);
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('companies_') || key.startsWith('details_') || key.startsWith('cost_') || key.startsWith('process1_') || key.startsWith('process2_'))) {
+                localStorage.removeItem(key);
+            }
+        }
+        for (const key in fullData) {
+            if (key.startsWith('companies_') || key.startsWith('details_') || key.startsWith('cost_') || key.startsWith('process1_') || key.startsWith('process2_')) {
+                localStorage.setItem(key, JSON.stringify(fullData[key]));
+            }
+        }
+        
+        showMonthlyReport();  
+        alert('โหลดข้อมูลสำเร็จ!');
+    } catch(e) {
+        alert('รูปแบบไฟล์ JSON ไม่ถูกต้องหรือไม่สมบูรณ์');
+    }
+};
+reader.readAsText(file);
+}
+
+window.onload=()=>{
+    showMonthlyReport();  
+}
+</script>
+<!-- 🔹 แทนที่หน้า 3 และ 4 เดิมทั้งหมด ด้วยส่วนนี้ -->
+<div id="detailCostTab" class="tab">
+  <h2>รายละเอียด & ต้นทุน</h2>
+  <div class="split-container">
+    <!-- 🔸 ซ้าย: หน้ารายละเอียดขั้นตอนการทำ -->
+    <div class="left-panel">
+      <h3>รายละเอียดชิ้นงาน</h3>
+      <div class="scroll-box">
+        <table id="detailTable">
+          <thead>
+            <tr>
+              <th>ลำดับ</th>
+              <th>ชื่อชิ้นงาน</th>
+              <th>รายละเอียด</th>
+              <th>ราคา/หน่วย</th>
+              <th>จำนวน</th>
+              <th>รวม</th>
+              <th>ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="detailBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5" style="text-align:right;">รวมทั้งหมด:</td>
+              <td id="detailTotal">0.00</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <button class="add-btn" onclick="addDetailRow()">➕ เพิ่มรายการ</button>
+    </div>
+
+    <!-- 🔸 ขวา: หน้าต้นทุน -->
+    <div class="right-panel">
+      <h3>ต้นทุนการผลิต</h3>
+      <div class="scroll-box">
+        <table id="costTable">
+          <thead>
+            <tr>
+              <th>ลำดับ</th>
+              <th>รายการต้นทุน</th>
+              <th>ต้นทุน/หน่วย</th>
+              <th>จำนวน</th>
+              <th>รวม</th>
+              <th>ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="costBody"></tbody>
+          <tfoot>
+            <tr>
+              <td colspan="4" style="text-align:right;">รวมต้นทุนทั้งหมด:</td>
+              <td id="costTotal">0.00</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <button class="add-btn" onclick="addCostRow()">➕ เพิ่มต้นทุน</button>
+    </div>
+  </div>
+</div>
+
+<style>
+.split-container {
+  display: flex;
+  gap: 1rem;
+}
+.left-panel, .right-panel {
+  flex: 1;
+  background: #fff;
+  border-radius: 10px;
+  padding: 1rem;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+}
+.scroll-box {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 0.5rem;
+}
+</style>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCsCASlcTE9AKdIRjTz5ze6U9VV63_hn90",
+  authDomain: "smart-factory-d41e6.firebaseapp.com",
+  databaseURL: "https://smart-factory-d41e6-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "smart-factory-d41e6",
+  storageBucket: "smart-factory-d41e6.firebasestorage.app",
+  messagingSenderId: "880407469653",
+  appId: "1:880407469653:web:104057bd6b07b1c5553edc"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+set(ref(db, "machine/status"), {
+  temperature: 32,
+  status: "running"
+});
+
+</script>
+ 
+
+</body>
+</html>
